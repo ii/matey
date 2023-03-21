@@ -2,7 +2,7 @@
 
 * Beyond Single Player Mode
 Does the black box on your computer seem a bit dawnting? Then use coopmode to invite a trusted friend to explore it with you!
-#+HTML: <img src="https://user-images.githubusercontent.com/31331/226689524-c75b98a9-7252-4b8e-a3e9-0969acb55931.gif">
+#+HTML: <img src="https://user-images.githubusercontent.com/31331/226693670-682c86ac-5f24-4ad9-bf89-de0df4d1401e.gif">
 * Install coopmode
 #+begin_src shell
 curl -fsSL https://raw.githubusercontent.com/ii/coopmode/canon/coopmode-setup.sh | bash
