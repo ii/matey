@@ -1,0 +1,15 @@
+#+title: Coop Mode
+
+* Beyond Single Player Mode
+Does the black box on your computer seem a bit dawnting? Then use coopmode to invite a trusted friend to explore it with you!
+* Install coopmode
+#+begin_src shell
+curl -fsSL https://raw.githubusercontent.com/ii/coopmode/canon/coopmode-setup.sh | bash
+#+end_src
+* Run coopmode
+#+begin_src tmate :window coopmode
+coopmode start
+#+end_src
+#+begin_src shell
+coopmode connect
+#+end_src
