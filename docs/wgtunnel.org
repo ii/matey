@@ -6,7 +6,7 @@ The recentl opensourced wgtunnel, and ii brought up our own instance at `try.ii.
 
 As latency is important in applicatinos like terminal sharing, it may be useful for you to set up a wgtunnel in your neighborhood.
 
-We'll document our setup here.
+We'll document our setup here, compile source from https://github.com/coder/wgtunnel beforehard to produce `tunneld` and `tunnel` client.
 
 * WildCard TLS with Certbot and DNS01
 You will need manual access to set TXT records on the desired domain. In our case ii.nz and try.ii.nz.
