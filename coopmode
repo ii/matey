@@ -25,9 +25,14 @@ ACTION=${1:-status}
 case $ACTION in
   status)
       # List information about tmux
-      tmux -L ii list-sessions
-      tmux -L ii has-session -t ii
-      tmux -L ii list-windows -t ii
+      if tmux -L ii has-session -t ii 2> /dev/null 1> /dev/null
+      then
+        tmux -L ii list-sessions
+        tmux -L ii has-session -t ii
+        tmux -L ii list-windows -t ii
+      else
+        echo "No tmux sessions on '-L ii' socket"
+      fi
       # Display how to connect to ttyd
       if [[ -e $COOPMODE_DIR/ttyd.pid ]]
       then ps -p $(cat $COOPMODE_DIR/ttyd.pid) 2>&1 > /dev/null && \
@@ -36,16 +41,16 @@ case $ACTION in
       # Display how to connect to tunnel
       if [[ -e $COOPMODE_DIR/tunnel.pid ]]
       then ps -p $(cat $COOPMODE_DIR/tunnel.pid) 2>&1 > /dev/null && \
-        grep "You can now connect" $HOME/.config/ttydmux/tunnel.log
+        grep "You can now connect" $COOPMODE_DIR/tunnel.log
       fi
       # Display how to connect to tmux directly
-      tmux -L ii has-session -t ii && \
+      tmux -L ii has-session -t ii 2>/dev/null 1>/dev/null && \
         echo Connect to tmux locally via: &&\
         echo tmux -L ii at
       echo 'USAGE: coopmode [status|start|stop|connect]'
   ;;
   start)
-    if $(tmux -L ii has-session -t ii)
+    if $(tmux -L ii has-session -t ii 2>&1 > /dev/null)
     then echo "tmux session exists!"
     else tmux -L ii new -d -c $HOME -e COOPMODE=true -s ii
     echo $! > $COOPMODE_DIR/tmux.pid
@@ -55,7 +60,7 @@ case $ACTION in
     echo ttyd logs are available in $TTYD_LOGFILE
     tunnel localhost:54321 2>&1 > $TUNNEL_LOGFILE &
     echo $! > $COOPMODE_DIR/tunnel.pid
-    echo tunnel logs are available in $TTYD_LOGFILE
+    echo tunnel logs are available in $TUNNEL_LOGFILE
     echo Connect to tmux locally via: &&\
     echo tmux -L ii at
   ;;

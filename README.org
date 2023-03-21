@@ -2,6 +2,7 @@
 
 * Beyond Single Player Mode
 Does the black box on your computer seem a bit dawnting? Then use coopmode to invite a trusted friend to explore it with you!
+#+HTML: <img src="https://user-images.githubusercontent.com/31331/226689524-c75b98a9-7252-4b8e-a3e9-0969acb55931.gif">
 * Install coopmode
 #+begin_src shell
 curl -fsSL https://raw.githubusercontent.com/ii/coopmode/canon/coopmode-setup.sh | bash
@@ -10,6 +11,30 @@ curl -fsSL https://raw.githubusercontent.com/ii/coopmode/canon/coopmode-setup.sh
 #+begin_src tmate :window coopmode
 coopmode start
 #+end_src
+#+begin_example
+tmux session exists!
+ttyd logs are available in /Users/hh/.config/coopmode/ttyd.log
+tunnel logs are available in /Users/hh/.config/coopmode/ttyd.log
+Connect to tmux locally via:
+tmux -L ii at
+[2023/03/22 05:34:47:5174] N: ttyd 1.7.3 (libwebsockets 4.3.2-unknown)
+[2023/03/22 05:34:47:5179] N: tty configuration:
+[2023/03/22 05:34:47:5179] N:   start command: tmux -L ii at
+[2023/03/22 05:34:47:5179] N:   close signal: SIGHUP (1)
+[2023/03/22 05:34:47:5179] N:   terminal type: xterm-256color
+hh@Max coopmode % [2023/03/22 05:34:47:5547] N:    /opt/homebrew/Cellar/libwebsockets/4.3.2/lib/libwebsockets-evlib_uv.dylib
+[2023/03/22 05:34:47:5548] N: lws_create_context: LWS: 4.3.2-unknown, NET CLI SRV H1 H2 WS ConMon IPV6-off
+[2023/03/22 05:34:47:5549] N: elops_init_pt_uv:  Using foreign event loop...
+[2023/03/22 05:34:47:5550] N: __lws_lc_tag:  ++ [wsi|0|pipe] (1)
+[2023/03/22 05:34:47:5552] N: __lws_lc_tag:  ++ [vh|0|default||54321] (1)
+[2023/03/22 05:34:47:5578] N: [vh|0|default||54321]: lws_socket_bind: source ads 0.0.0.0
+[2023/03/22 05:34:47:5578] N: __lws_lc_tag:  ++ [wsi|1|listen|default||54321] (2)
+[2023/03/22 05:34:47:5578] N:  Listening on port: 54321
+Tunnel is ready. You can now connect to one of the following URLs:
+  - https://656n2rc5uc81a.try.ii.nz
+  - https://fcca314d716d85f310159675dc4bdf22.try.ii.nz
+#+end_example
+
 #+begin_src shell
 coopmode connect
 #+end_src
