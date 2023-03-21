@@ -38,3 +38,44 @@ Tunnel is ready. You can now connect to one of the following URLs:
 #+begin_src shell
 coopmode connect
 #+end_src
+#+begin_src shell
+coopmode status
+#+end_src
+
+#+RESULTS:
+#+begin_example
+ii: 1 windows (created Wed Mar 22 06:11:00 2023) (attached)
+0: zsh* (1 panes) [78x12] [layout ac1d,78x12,0,0,0] @0 (active)
+Connect to tmux locally via:
+tmux -L ii at
+USAGE: coopmode [status|start|stop|connect]
+#+end_example
+
+* Run coder
+In order to connect coder, you`ll need a custom build/branch from https://github.com/coder/coder/pull/6489 until it merges and a release is made.
+
+#+begin_src shell
+coder server --wg-tunnel-host try.ii.nz
+#+end_src
+
+Here is the build from src:
+
+#+begin_example
+hh@Max coder % git remote get-url coder
+git@github.com:coder/coder
+hh@Max coder % git log -1
+commit c90142937e23ef5e573e498a78a16e1c3d7a5317 (HEAD -> tunnelsdk, coder/dean/tunnelsdk)
+Author: Dean Sheather <dean@deansheather.com>
+Date:   Tue Mar 21 03:01:20 2023 +0000
+
+    chore: rename tunnel-host to wgtunnel-host
+hh@Max coder % make
+build/coder-slim_0.19.2-devel+c9014293.tar : 23.79%   (   384 MiB =>   91.3 MiB, build/coder-slim_0.19.2-devel+c9014293.tar.zst)
+hh@Max coder % ./build/coder_0.19.2-devel+c9014293_darwin_amd64 server --wg-tunnel-host try.ii.nz
+Coder v0.19.2-devel+c9014293 - Your Self-Hosted Remote Development Platform
+Using built-in PostgreSQL (/Users/hh/Library/Application Support/coderv2/postgres)
+Started HTTP listener at http://127.0.0.1:3000
+Opening tunnel so workspaces can connect to your deployment. For production scenarios, specify an external access URL
+
+View the Web UI: https://q1bn1bs94rnrm.try.ii.nz
+#+end_example

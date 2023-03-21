@@ -1,0 +1,89 @@
+#+title: Wgtunnel
+
+* coder/wgtunnel
+Coder runs `pit-1.try.coder.app` as a wgtunnel instance to support coder.
+The recentl opensourced wgtunnel, and ii brought up our own instance at `try.ii.nz`.
+
+As latency is important in applicatinos like terminal sharing, it may be useful for you to set up a wgtunnel in your neighborhood.
+
+We'll document our setup here.
+
+* WildCard TLS with Certbot and DNS01
+You will need manual access to set TXT records on the desired domain. In our case ii.nz and try.ii.nz.
+
+#+begin_src shell
+certbot certonly --server https://acme-v02.api.letsencrypt.org/directory  --manual --preferred-challenges dns -d *.try.ii.nz -d try.ii.nz
+#+end_src
+
+This will ask you to configure some *_acme_challenge* txt records via your DNS interface, but when completed you will have `/etc/letsencrypt/archive/try.YOURDOOMAIN/` folder with `fullchain1.pem` and `privkey1.pem`. These can be used by software like nginix to provide SSL secured HTTPS websites for this domain.
+
+#+begin_src shell
+dig _acme_challenge.try.ii.nz TXT
+#+end_src
+
+It's also necessary to configure wildcard DNS A records to point to your domain. ie `*.try.ii.nz` and `try.ii.nz` pointing to the same IP, running nginx and wgtunnel.
+
+#+begin_src shell
+dig foobarbaz.try.ii.nz A | grep -A1 ANSWER\ SECTION
+#+end_src
+
+#+RESULTS:
+#+begin_example
+;; ANSWER SECTION:
+foobarbaz.try.ii.nz.	41	IN	A	123.253.179.254
+#+end_example
+
+* Nginx Config
+Dropped into `/etc/nginx/conf.d/wgtunnel.conf` or similar. Note the backend running on port 8080 is part of wgtunnel, and that `Upgrade` and `Connection "Upgrade"` headers are required for websockets to work.
+
+#+begin_src conf
+server {
+        listen       443 default_server ssl;
+	# ssl on;
+	ssl_certificate /etc/letsencrypt/archive/try.ii.nz/fullchain1.pem ;
+	ssl_certificate_key /etc/letsencrypt/archive/try.ii.nz/privkey1.pem ;
+        # server_name  try.ii.nz;
+	server_name         _;
+        location ~ .* {
+            proxy_pass http://localhost:8080;
+            proxy_set_header Host $host;
+	    proxy_http_version 1.1;
+	    proxy_set_header Upgrade $http_upgrade;
+	    proxy_set_header Connection "Upgrade";
+            }
+        }
+server {
+        listen       80;
+	server_name         _;
+        # server_name  try.ii.nz;
+
+        location ~ .* {
+            proxy_pass http://localhost:8080;
+            proxy_redirect http://backend https://$host;
+            proxy_set_header Host $host;
+            }
+        }
+#+end_src
+* tunneld config
+tunneld is primarily configured through environment variables, be sure they are exported to the tunneld process.
+
+#+begin_src shell
+TUNNELD_WIREGUARD_MTU=1280
+TUNNELD_WIREGUARD_ENDPOINT=try.ii.nz:54321
+TUNNELD_WIREGUARD_KEY=PRIVATE
+TUNNELD_PPROF_LISTEN_ADDRESS=
+TUNNELD_WIREGUARD_PORT=54321
+TUNNELD_LISTEN_ADDRESS=127.0.0.1:8080
+TUNNELD_BASE_URL=https://try.ii.nz
+TUNNELD_VERBOSE=true
+#+end_src
+
+The process will:
+- listen on 54321 udp for wiregard packets
+- let tunnel clients know to connect to try.ii.nz:54321 udp
+- listen on 127.0.0.1:8080 for api connections (needs to have SSL in front... which we use nginx for)
+- Communicate https://try.ii.nz as the base url to wgtunnel clients (for sub urls based on client wireguard keys)
+
+#+begin_src shell
+tunneld
+#+end_src
