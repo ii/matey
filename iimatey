@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # set -xe # Enable for debug
-# Use COOPMODE_DIR if set, or default to $HOME/.config/coopmode
-export COOPMODE_DIR=${COOPMODE_DIR:-$HOME/.config/coopmode}
-mkdir -p $COOPMODE_DIR
+# Use IIMATEY_DIR if set, or default to $HOME/.config/iimatey
+export IIMATEY_DIR=${IIMATEY_DIR:-$HOME/.config/iimatey}
+mkdir -p $IIMATEY_DIR
 # Logfiles collect both stderr and stdout from ttyd and tunnel
-export TTYD_LOGFILE=$COOPMODE_DIR/ttyd.log
-export TUNNEL_LOGFILE=$COOPMODE_DIR/tunnel.log
+export TTYD_LOGFILE=$IIMATEY_DIR/ttyd.log
+export TUNNEL_LOGFILE=$IIMATEY_DIR/tunnel.log
 
 # Possibly presist this...
 # https://www.man7.org/linux/man-pages/man8/wg.8.html#COMMANDS
 # wg genkey :: Generates a random private key in base64 and prints it to standard output.
 # You could save this to persist your url.
 # By default, for safety let's generate it on the fly each time
-# Use COOPMODE_WIREGUARD_KEY if set, or default to running `wg keygen` for a new one each time
-export TUNNEL_WIREGUARD_KEY=${COOPMODE_WIREGUARD_KEY:-$(wg genkey)}
-# Use COOPMODE_API_URL if set, or default to https://try.ii.nz
-export TUNNEL_API_URL=${COOPMODE_API_URL:-https://try.ii.nz}
+# Use IIMATEY_WIREGUARD_KEY if set, or default to running `wg keygen` for a new one each time
+export TUNNEL_WIREGUARD_KEY=${IIMATEY_WIREGUARD_KEY:-$(wg genkey)}
+# Use IIMATEY_API_URL if set, or default to https://try.ii.nz
+export TUNNEL_API_URL=${IIMATEY_API_URL:-https://try.ii.nz}
 
 # We install to /usr/local/bin... but on OSX it's not in the path by default
 export PATH=/usr/local/bin:$PATH
@@ -34,50 +34,50 @@ case $ACTION in
         echo "No tmux sessions on '-L ii' socket"
       fi
       # Display how to connect to ttyd
-      if [[ -e $COOPMODE_DIR/ttyd.pid ]]
-      then ps -p $(cat $COOPMODE_DIR/ttyd.pid) 2>&1 > /dev/null && \
+      if [[ -e $IIMATEY_DIR/ttyd.pid ]]
+      then ps -p $(cat $IIMATEY_DIR/ttyd.pid) 2>&1 > /dev/null && \
         echo Connect to ttyd locally via http://localhost:54321
       fi
       # Display how to connect to tunnel
-      if [[ -e $COOPMODE_DIR/tunnel.pid ]]
-      then ps -p $(cat $COOPMODE_DIR/tunnel.pid) 2>&1 > /dev/null && \
-        grep "You can now connect" $COOPMODE_DIR/tunnel.log
+      if [[ -e $IIMATEY_DIR/tunnel.pid ]]
+      then ps -p $(cat $IIMATEY_DIR/tunnel.pid) 2>&1 > /dev/null && \
+        grep "You can now connect" $IIMATEY_DIR/tunnel.log
       fi
       # Display how to connect to tmux directly
       tmux -L ii has-session -t ii 2>/dev/null 1>/dev/null && \
         echo Connect to tmux locally via: &&\
         echo tmux -L ii at
-      echo 'USAGE: coopmode [status|start|stop|connect]'
+      echo 'USAGE: iimatey [status|start|stop|connect]'
   ;;
   start)
     if $(tmux -L ii has-session -t ii 2>&1 > /dev/null)
     then echo "tmux session exists!"
-    else tmux -L ii new -d -c $HOME -e COOPMODE=true -s ii
-    echo $! > $COOPMODE_DIR/tmux.pid
+    else tmux -L ii new -d -c $HOME -e IIMATEY=true -s ii
+    echo $! > $IIMATEY_DIR/tmux.pid
     fi
     ttyd -p 54321 tmux -L ii at 2>&1 > $TTYD_LOGFILE &
-    echo $! > $COOPMODE_DIR/ttyd.pid
+    echo $! > $IIMATEY_DIR/ttyd.pid
     echo ttyd logs are available in $TTYD_LOGFILE
     tunnel localhost:54321 2>&1 > $TUNNEL_LOGFILE &
-    echo $! > $COOPMODE_DIR/tunnel.pid
+    echo $! > $IIMATEY_DIR/tunnel.pid
     echo tunnel logs are available in $TUNNEL_LOGFILE
     echo Connect to tmux locally via: &&\
     echo tmux -L ii at
   ;;
   stop)
     # we won't stop tmux... let's leave it
-    if [[ -e $COOPMODE_DIR/ttyd.pid ]]
-    then kill `cat $COOPMODE_DIR/ttyd.pid` && rm $COOPMODE_DIR/ttyd.pid
+    if [[ -e $IIMATEY_DIR/ttyd.pid ]]
+    then kill `cat $IIMATEY_DIR/ttyd.pid` && rm $IIMATEY_DIR/ttyd.pid
     fi
-    if [[ -e $COOPMODE_DIR/tunnel.pid ]]
-    then kill `cat $COOPMODE_DIR/tunnel.pid` && rm $COOPMODE_DIR/tunnel.pid
+    if [[ -e $IIMATEY_DIR/tunnel.pid ]]
+    then kill `cat $IIMATEY_DIR/tunnel.pid` && rm $IIMATEY_DIR/tunnel.pid
     fi
   ;;
   connect)
     # Create new, or connect to old (doesn't start ttyd or tunnel)
     if $(tmux -L ii has-session -t ii)
     then tmux -L ii at
-    else tmux -L ii new -c $HOME -e COOPMODE=true -s ii
-    echo $! > $COOPMODE_DIR/tmux.pid
+    else tmux -L ii new -c $HOME -e IIMATEY=true -s ii
+    echo $! > $IIMATEY_DIR/tmux.pid
     fi
 esac

@@ -1,7 +1,7 @@
 #+title: ii matey!
 
 * Aye, Aye Matey
-Does the inky blackness of the termimal on your computer seem a bit dawnting? Then use call on a trusted matey to explore it with you!
+Does the inky blackness of the termimal on your computer seem a bit dawnting? Then use iimatey to call on a trusted matey to explore it with you!
 #+HTML: <img src="https://user-images.githubusercontent.com/31331/226693670-682c86ac-5f24-4ad9-bf89-de0df4d1401e.gif">
 * Install matey
 #+begin_src shell
