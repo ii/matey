@@ -1,4 +1,4 @@
-#+title: ii matey!
+#+title: iimatey
 
 * Aye, Aye Matey
 Does the inky blackness of the termimal on your computer seem a bit dawnting? Then use iimatey to call on a trusted matey to explore it with you!
