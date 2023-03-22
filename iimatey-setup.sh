@@ -52,6 +52,5 @@ wg version
 /usr/local/bin/tunnel --version
 echo $PATH | grep /usr/local/bin > /dev/null || echo "You may want to add /usr/local/bin to your PATH"
 
-curl -LO https://raw.githubusercontent.com/ii/coopmode/canon/coopmode
-sudo mv coopmode /usr/local/bin/coopmode
-sudo chmod +x /usr/local/bin/coopmode
+sudo curl -o /usr/local/bin/iimatey -L https://raw.githubusercontent.com/ii/matey/canon/iimatey
+sudo chmod +x /usr/local/bin/iimatey

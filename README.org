@@ -1,20 +1,20 @@
-#+title: Coop Mode
+#+title: ii matey!
 
-* Beyond Single Player Mode
-Does the black box on your computer seem a bit dawnting? Then use coopmode to invite a trusted friend to explore it with you!
+* Aye, Aye Matey
+Does the inky blackness of the termimal on your computer seem a bit dawnting? Then use call on a trusted matey to explore it with you!
 #+HTML: <img src="https://user-images.githubusercontent.com/31331/226693670-682c86ac-5f24-4ad9-bf89-de0df4d1401e.gif">
-* Install coopmode
+* Install matey
 #+begin_src shell
-curl -fsSL https://raw.githubusercontent.com/ii/coopmode/canon/coopmode-setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ii/matey/canon/iimatey-setup.sh | bash
 #+end_src
-* Run coopmode
-#+begin_src tmate :window coopmode
-coopmode start
+* Run iimatey
+#+begin_src tmate :window iimatey
+iimatey start
 #+end_src
 #+begin_example
 tmux session exists!
-ttyd logs are available in /Users/hh/.config/coopmode/ttyd.log
-tunnel logs are available in /Users/hh/.config/coopmode/ttyd.log
+ttyd logs are available in /Users/hh/.config/iimatey/ttyd.log
+tunnel logs are available in /Users/hh/.config/iimatey/ttyd.log
 Connect to tmux locally via:
 tmux -L ii at
 [2023/03/22 05:34:47:5174] N: ttyd 1.7.3 (libwebsockets 4.3.2-unknown)
@@ -22,7 +22,7 @@ tmux -L ii at
 [2023/03/22 05:34:47:5179] N:   start command: tmux -L ii at
 [2023/03/22 05:34:47:5179] N:   close signal: SIGHUP (1)
 [2023/03/22 05:34:47:5179] N:   terminal type: xterm-256color
-hh@Max coopmode % [2023/03/22 05:34:47:5547] N:    /opt/homebrew/Cellar/libwebsockets/4.3.2/lib/libwebsockets-evlib_uv.dylib
+hh@Max iimatey % [2023/03/22 05:34:47:5547] N:    /opt/homebrew/Cellar/libwebsockets/4.3.2/lib/libwebsockets-evlib_uv.dylib
 [2023/03/22 05:34:47:5548] N: lws_create_context: LWS: 4.3.2-unknown, NET CLI SRV H1 H2 WS ConMon IPV6-off
 [2023/03/22 05:34:47:5549] N: elops_init_pt_uv:  Using foreign event loop...
 [2023/03/22 05:34:47:5550] N: __lws_lc_tag:  ++ [wsi|0|pipe] (1)
@@ -36,10 +36,10 @@ Tunnel is ready. You can now connect to one of the following URLs:
 #+end_example
 
 #+begin_src shell
-coopmode connect
+iimatey connect
 #+end_src
 #+begin_src shell
-coopmode status
+iimatey status
 #+end_src
 
 #+RESULTS:
@@ -48,7 +48,7 @@ ii: 1 windows (created Wed Mar 22 06:11:00 2023) (attached)
 0: zsh* (1 panes) [78x12] [layout ac1d,78x12,0,0,0] @0 (active)
 Connect to tmux locally via:
 tmux -L ii at
-USAGE: coopmode [status|start|stop|connect]
+USAGE: iimatey [status|start|stop|connect]
 #+end_example
 
 * Run coder
