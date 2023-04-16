@@ -14,23 +14,72 @@
        --fish-primary: #92e4ea;
        --fish-secondary: #4ec8d8;
      }
+     body,html{
+       margin: 0;
+       padding: 0;
+       box-sizing: border-box;
+       min-height: 100%;
+     }
+
      body {
        font-family: sans-serif;
        background: linear-gradient(to bottom, #92BBFF,dodgerblue,navy);
        color: #f2f2f2;
-     }
-     main {
-       height: 100vh;
-       display: flex;
-       align-items: center;
-       flex-flow: column;
+       margin:0;
      }
 
+     main {
+       max-width: 42rem;
+       margin: auto;
+     }
+
+     section {
+       max-width: 42rem;
+       font-size: 1.3rem;
+     }
+
+     figure {
+       max-width: 800px;
+       margin: auto;
+       border-radius: 20px;
+       overflow: clip;
+
+     }
+
+     img {
+       max-width: 100%;
+     }
+
+     .install-instructions {
+       margin: 1rem auto;
+       background: white;
+       color: #222;
+       padding: 0.5rem 0.5rem 0.5rem 1rem;
+       border-radius: 10px;
+     }
+
+     code {
+       background: #222;
+       display: block;
+       color: chartreuse;
+       max-width: 100%;
+       padding: 0.5rem;
+     }
+
+
      h1 {
-       /* filter: hue-rotate(180deg); */
+       text-align: center;
        font-size: 4rem;
        margin-bottom: 0;
        font-weight: 800;
+     }
+
+     details {
+       text-align: left;
+     }
+
+     #examples {
+       text-align: center;
      }
 
      .tagline {
@@ -44,6 +93,7 @@
        margin-top: 4rem;
        text-align: center;
      }
+
 
      .preamble {
        font-weight: 800;
@@ -66,6 +116,11 @@
        -webkit-animation-duration: 30s;
        z-index: -1;
        opacity: 0.6;
+     }
+     .fish.reverse{
+       -webkit-animation-name: ltr;
+       right: unset;
+       left: -5%;
      }
 
      .fish.bottom{
@@ -118,6 +173,41 @@
        --fish-primary: tomato;
        --fish-secondary: lemonchiffon;
      }
+
+     @keyframes ltr {
+       0%{
+         left: 0%;
+         transform: translateY(20px);
+       }
+       15%{
+         left: 15%;
+         transform: translateY(-40px);
+       }
+       30% {
+         left: 30%;
+         transform: translateY(40px);
+       }
+       45%{
+         left: 50%;
+         transform: translateY(-40px);
+       }
+       60%{
+         left: 60%;
+         transform: translateY(40px);
+       }
+       75%{
+         left: 75%;
+         transform: translateY(-40px);
+       }
+       90% {
+         left: 90%;
+         transform: translateY(40px);
+       }
+       100% {
+         left: 100%;
+         transform: translateY(-40px);
+       }
+     }
      @keyframes rtl {
        0%{
          right: 0%;
@@ -162,7 +252,16 @@
         <h1>Aye Aye, Matey!</h1>
         <p class='tagline'>call on a trusted mate to explore the terminal with you!</p>
       </header>
-      <section id='instructions'>
+      <section id='description'>
+        <p>matey is a program to start up a session in your terminal that is
+        sharable via a weblink. It is meant as a low-friction way to collaborate
+        with a friend directly in your command line.
+        </p>
+      </section>
+        <figure>
+        <img src="https://user-images.githubusercontent.com/31331/227025347-29538023-f143-46bb-b365-854fae78709c.gif">
+        </figure>
+      <section id='examples'>
         <p class='preamble'>in your terminal, type...</p>
         <div class='command'>
           <p class='invocation'><code>matey start</code></p>
@@ -176,6 +275,40 @@
           <p class='invocation'><code>matey status</code></p>
           <em class='purpose'>to check the status of the service
           </em>
+      </section>
+      <section id='installation'>
+        <h2>Installation</h2>
+        <p>To install matey, you will first install prerequisite tools that matey requires, then run matey's install script.</p>
+        <h3>install prerequisites</h3>
+        <p>Our matey tool depends on tmux, ttyd, wireguard.</p>
+        <details class='install-instructions'>
+        <summary>If you are on ubuntu/linux</summary>:
+        <p>copy and paste the following into your terminal</p>
+        <code>apt install tmux,ttyd,wg</code>
+        </details>
+        <details class='install-instructions'>
+        <summary>If you are on macos:</summary>
+        <p>first, <a href="https://brew.sh">install brew</a></p>
+          <p>Then, copy and paste the following into your terminal:</p>
+          <code>brew install tmux,ttyd,wg</code>
+        </details>
+        <h3>run our install script</h3>
+        <p>After prerequisites are installed, copy and paste the following into your terminal</p>
+        <code>curl -fsSL https://raw.githubusercontent.com/ii/matey/canon/iimatey-setup.sh | bash </code>
+      </section>
+      <section id='faq'>
+        <h2>FAQ</h2>
+        <details>
+          <summary>Is matey secure?</summary>
+          <p>To a reasonable degree, yes.  When you start a session, we generate a random url that would be virtually impossible to guess and would require treme3ndous time and effort to determine through brute force.</p>
+          <p>The session exists for only as long as you have the terminal window open.</p>
+            <p>Still, you are sharing your terminal as a site available on the internet, so some precautions are needed:
+              <ul>
+                <li>share the link only with a person you trust</li>
+                <li>close your terminal window at the end of the pair, to make sure you are no longer sharing any sessions</li>
+              </ul>
+          <p>
+        </details>
       </section>
       <section>
         <?xml version="1.0" encoding="utf-8"?>
@@ -258,7 +391,6 @@
           <path  class='head' fill="var(--fish-primary)" d="M228.5 403.4c57.7 65.4 57.7 164.1 0.1 229.5-80.7-28.7-128.5-71.2-128.5-114.7 0-43.9 48.9-86.5 128.4-114.8z" />
           <path  class='eye' fill="var(--fish-outline)" d="M205 491.2m-20.7 0a20.7 20.7 0 1 0 41.4 0 20.7 20.7 0 1 0-41.4 0Z" />
         </svg>
-      </section>
     </main>
   </body>
 </html>
