@@ -36,7 +36,7 @@ case $ACTION in
     # Display how to connect to ttyd
     if [[ -e $IIMATEY_DIR/ttyd.pid ]]; then
       ps -p $(cat $IIMATEY_DIR/ttyd.pid) 2>&1 >/dev/null &&
-        echo Connect to ttyd locally via http://localhost:12345
+        echo Connect to ttyd locally via http://localhost:7681
     fi
     # Display how to connect to tunnel
     if [[ -e $IIMATEY_DIR/tunnel.pid ]]; then
@@ -53,11 +53,11 @@ case $ACTION in
     # TODO: nicer logic here to detect available port and start
     # ttyd support -p 0 (random port), but have not reliable way to grab it
     #export TTYD_PORT=${TTYD_PORT:12346}
-    ttyd --writable -p 12345 tmux at 2>&1 >$TTYD_LOGFILE &
-    # ttyd -p 12345 tmux at 2>&1 >$TTYD_LOGFILE &
+    # Use port 7681 (ttyd default) to avoid conflict with tunneld on 12345
+    ttyd --writable -p 7681 tmux at 2>&1 >$TTYD_LOGFILE &
     echo $! >$IIMATEY_DIR/ttyd.pid
     echo ttyd logs are available in $TTYD_LOGFILE
-    tunnel localhost:12345 2>&1 >$TUNNEL_LOGFILE &
+    tunnel localhost:7681 2>&1 >$TUNNEL_LOGFILE &
     echo $! >$IIMATEY_DIR/tunnel.pid
     echo tunnel logs are available in $TUNNEL_LOGFILE
     sleep 1 # Would be good to just wait till URL is available
