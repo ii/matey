@@ -99,3 +99,7 @@ Opening tunnel so workspaces can connect to your deployment. For production scen
 
 View the Web UI: https://q1bn1bs94rnrm.try.ii.nz
 #+end_example
+
+* Architecture
+
+How iimatey / iimux / tunnel / tunneld tie together: [[docs/architecture.md][docs/architecture.md]].
