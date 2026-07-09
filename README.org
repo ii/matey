@@ -10,7 +10,7 @@ Does the inky blackness of the termimal on your computer seem a bit dawnting? Th
 
 iimatey is a shel script that ties together [[https://github.com/tmux/tmux/wiki][tmux]], [[https://github.com/tsl0922/ttyd][ttyd]], and the [[https://github.com/coder/wgtunnel][coder/wgtunnel]] client.
 
-You can run your own instance of tunneld , we run one at https://try.sharing.io which we configure via [[https://github.com/sharingio/infra/tree/uk/apps/tunneld][sharingio/infra]]
+You can run your own instance of tunneld , we run one at https://iimatey.sharing.io which we configure via [[https://github.com/sharingio/infra/tree/uk/apps/tunneld][sharingio/infra]]
 
 * Install iimatey
 ** One line install with the [[https://github.com/ii/matey/blob/canon/iimatey-setup.sh][iimatey-setup.sh]] setup script

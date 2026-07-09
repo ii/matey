@@ -15,11 +15,41 @@ export TUNNEL_LOGFILE=$IIMATEY_DIR/tunnel.log
 # Use IIMATEY_WIREGUARD_KEY if set, or default to running `wg keygen` for a new one each time
 #export TUNNEL_WIREGUARD_KEY=${IIMATEY_WIREGUARD_KEY:-$(wg genkey)}
 export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key
-# Use IIMATEY_API_URL if set, or default to https://try.cloudnative.coop
-export TUNNEL_API_URL=${IIMATEY_API_URL:-https://try.sharing.io}
+# Use IIMATEY_API_URL if set, or default to https://iimatey.sharing.io
+export TUNNEL_API_URL=${IIMATEY_API_URL:-https://iimatey.sharing.io}
 
 # We install to /usr/local/bin... but on OSX it's not in the path by default
 export PATH=/usr/local/bin:$PATH
+
+# Generate tunnel name - sanitize to meet requirements:
+# - 3-32 characters, lowercase alphanumeric with hyphens
+# - must start and end with alphanumeric
+sanitize_name() {
+  local name="$1"
+  # Convert to lowercase, replace invalid chars with hyphens
+  name=$(echo "$name" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9-' '-')
+  # Remove leading/trailing hyphens and collapse multiple hyphens
+  name=$(echo "$name" | sed 's/^-*//;s/-*$//;s/--*/-/g')
+  # Truncate to 32 chars, ensuring we don't end with hyphen
+  name="${name:0:32}"
+  name=$(echo "$name" | sed 's/-*$//')
+  # Ensure minimum 3 chars
+  if [ ${#name} -lt 3 ]; then
+    name="${name}000"
+    name="${name:0:3}"
+  fi
+  echo "$name"
+}
+
+# Use IIMATEY_NAME if set, otherwise generate from user-hostname
+if [ -n "$IIMATEY_NAME" ]; then
+  TUNNEL_NAME=$(sanitize_name "$IIMATEY_NAME")
+else
+  # Default: user-hostname (e.g., hh-bluefin)
+  SHORT_HOST=$(hostname -s 2>/dev/null || hostname | cut -d. -f1)
+  TUNNEL_NAME=$(sanitize_name "${USER:-$(whoami)}-${SHORT_HOST}")
+fi
+export TUNNEL_NAME
 
 # Usage ttydmux [status|start|stop] # Default is status
 ACTION=${1:-status}
@@ -47,6 +77,7 @@ case $ACTION in
     tmux has-session -t ii 2>/dev/null 1>/dev/null &&
       echo Connect to tmux locally via: &&
       echo tmux at
+    echo "Tunnel name: $TUNNEL_NAME (override with IIMATEY_NAME env var)"
     echo 'USAGE: iimatey [status|start|stop|connect]'
     ;;
   start)
@@ -57,7 +88,8 @@ case $ACTION in
     ttyd --writable -p 7681 tmux at 2>&1 >$TTYD_LOGFILE &
     echo $! >$IIMATEY_DIR/ttyd.pid
     echo ttyd logs are available in $TTYD_LOGFILE
-    tunnel localhost:7681 2>&1 >$TUNNEL_LOGFILE &
+    echo "Registering tunnel with name: $TUNNEL_NAME"
+    tunnel -n "$TUNNEL_NAME" localhost:7681 2>&1 >$TUNNEL_LOGFILE &
     echo $! >$IIMATEY_DIR/tunnel.pid
     echo tunnel logs are available in $TUNNEL_LOGFILE
     sleep 1 # Would be good to just wait till URL is available
