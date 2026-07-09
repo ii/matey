@@ -102,4 +102,4 @@ View the Web UI: https://q1bn1bs94rnrm.try.ii.nz
 
 * Architecture
 
-How iimatey / iimux / tunnel / tunneld tie together: [[docs/architecture.md][docs/architecture.md]].
+How iimatey works (ttyd + tunnel + tunneld): [[docs/architecture.md][docs/architecture.md]].
