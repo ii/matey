@@ -76,11 +76,21 @@ USAGE: iimatey [status|start|stop|connect]
 
 ** terminal tty client :[[https://github.com/depau/ttyc][depau/ttyc]] depau/ttyc
 
-Build or download a release from : https://github.com/depau/ttyc/releases/tag/ttyc-v0.4
+A real terminal client for a ttyd/iimatey share URL — no browser needed.
+~iimatey-setup.sh~ installs it (pinned release, see [[https://github.com/depau/ttyc/releases/tag/ttyc-v0.4][ttyc-v0.4]]), and
+~iimatey~ itself now runs it for you whenever the first argument looks like a
+URL:
 
 #+begin_src shell
-ttyc -U https://dg5srp8e9gsj6.try.sharing.io
+iimatey https://dg5srp8e9gsj6.try.sharing.io
 #+end_src
+
+(equivalent to running ~ttyc -U https://dg5srp8e9gsj6.try.sharing.io~ directly,
+if you'd rather call it yourself or pass its other flags — auth, reconnect
+backoff, etc — see ~ttyc --help~.)
+
+Note: license is GPLv3 (depau/ttyc) — installed as a separate pinned-release
+binary alongside ttyd/tunnel, never vendored/linked into this repo.
 * coder
 #+begin_src shell
 coder server --wg-tunnel-host try.sharing.io

@@ -44,10 +44,20 @@ TUNNEL_URL=https://github.com/ii/wgtunnel/releases/download/$TUNNEL_RELEASE/tunn
 sudo curl -L -o /usr/local/bin/tunnel $TUNNEL_URL
 sudo chmod 0755 /usr/local/bin/tunnel # make executeable
 
+# Install ttyc (depau/ttyc, GPLv3) from github release — the terminal CLIENT
+# for connecting to a ttyd/iimatey URL without a browser. Used by
+# `iimatey https://...` (see iimatey script). Prebuilt binary, no build step
+# needed on our end.
+TTYC_RELEASE=ttyc-v0.4
+TTYC_URL=https://github.com/depau/ttyc/releases/download/$TTYC_RELEASE/$TTYC_RELEASE-$OS-$ARCH
+sudo curl -L -o /usr/local/bin/ttyc $TTYC_URL
+sudo chmod 0755 /usr/local/bin/ttyc # make executeable
+
 # WHAT WE NEED
 tmux -V
 ttyd --version
 /usr/local/bin/tunnel -V
+/usr/local/bin/ttyc --version
 echo $PATH | grep /usr/local/bin >/dev/null || echo "You may want to add /usr/local/bin to your PATH"
 
 # Install iimatey script from github

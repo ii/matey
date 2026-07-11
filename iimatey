@@ -51,7 +51,7 @@ else
 fi
 export TUNNEL_NAME
 
-# Usage ttydmux [status|start|stop] # Default is status
+# Usage iimatey [status|start|stop|connect|https://URL] # Default is status
 ACTION=${1:-status}
 case $ACTION in
   status)
@@ -78,7 +78,7 @@ case $ACTION in
       echo Connect to tmux locally via: &&
       echo tmux at
     echo "Tunnel name: $TUNNEL_NAME (override with IIMATEY_NAME env var)"
-    echo 'USAGE: iimatey [status|start|stop|connect]'
+    echo 'USAGE: iimatey [status|start|stop|connect|https://some-share-url]'
     ;;
   start)
     # TODO: nicer logic here to detect available port and start
@@ -121,5 +121,16 @@ case $ACTION in
       tmux new -e IIMATEY=true -s ii
       echo $! >$IIMATEY_DIR/tmux.pid
     fi
+    ;;
+  http://*|https://*)
+    # Client mode: connect to a remote iimatey/ttyd share URL (yours or
+    # someone else's) with a real local terminal instead of a browser.
+    # ttyc speaks ttyd's websocket protocol directly (see depau/ttyc);
+    # installed by iimatey-setup.sh alongside ttyd/tunnel.
+    command -v ttyc >/dev/null 2>&1 || {
+      echo "ERROR: ttyc not found — re-run iimatey-setup.sh to install it" >&2
+      exit 1
+    }
+    exec ttyc -U "$ACTION"
     ;;
 esac
