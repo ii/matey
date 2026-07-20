@@ -37,13 +37,20 @@ sanitize_name() {
   echo "$name"
 }
 
-# Use IIMATEY_NAME if set, otherwise generate from user-hostname
+# Tunnel name: explicit only, never a guessable default. `iimatey start
+# NAME` (positional) or IIMATEY_NAME (env var, takes priority) name it
+# deliberately -> https://NAME.sharing.io. If NEITHER is given, TUNNEL_NAME
+# stays empty and `start` won't pass -n to `tunnel` at all, so tunneld
+# assigns its own random/unguessable hash URL instead. (Previously always
+# defaulted to "<user>-<hostname>", e.g. "hh-nextral" — predictable by
+# construction, not something you want unless you asked for a stable,
+# nameable URL.)
 if [ -n "$IIMATEY_NAME" ]; then
   TUNNEL_NAME=$(sanitize_name "$IIMATEY_NAME")
+elif [ "${1:-}" = "start" ] && [ -n "${2:-}" ]; then
+  TUNNEL_NAME=$(sanitize_name "$2")
 else
-  # Default: user-hostname (e.g., hh-bluefin)
-  SHORT_HOST=$(hostname -s 2>/dev/null || hostname | cut -d. -f1)
-  TUNNEL_NAME=$(sanitize_name "${USER:-$(whoami)}-${SHORT_HOST}")
+  TUNNEL_NAME=""
 fi
 export TUNNEL_NAME
 
@@ -56,7 +63,15 @@ export TUNNEL_NAME
 # client racing the old registration's cooldown), found live. Keying the
 # file to the name means the same name reconnects on the same identity
 # (fine, expected), and switching names never fights an old registration.
-export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-${TUNNEL_NAME}
+#
+# No name at all -> a fresh one-time key every run, so "no name" really
+# means a random/unguessable URL each time, not a fixed key that just
+# happens to have no name attached to it.
+if [ -n "$TUNNEL_NAME" ]; then
+  export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-${TUNNEL_NAME}
+else
+  export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-onetime-$$-$(date +%s%N 2>/dev/null || echo $RANDOM)
+fi
 
 # tmux session name iimatey creates/attaches to. Hardcoded "ii" collides
 # with any other unrelated tmux session already using that name (found
@@ -65,7 +80,7 @@ export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-${TUNNEL_NAME}
 # already spawned ttyd+tunnel as orphans. Override with IIMATEY_SESSION.
 export IIMATEY_SESSION=${IIMATEY_SESSION:-ii}
 
-# Usage iimatey [status|start|stop|connect|https://URL] # Default is status
+# Usage iimatey [status|start [NAME]|stop|connect|https://URL] # Default is status
 ACTION=${1:-status}
 case $ACTION in
   status)
@@ -91,9 +106,13 @@ case $ACTION in
     tmux has-session -t "$IIMATEY_SESSION" 2>/dev/null 1>/dev/null &&
       echo Connect to tmux locally via: &&
       echo tmux at -t "$IIMATEY_SESSION"
-    echo "Tunnel name: $TUNNEL_NAME (override with IIMATEY_NAME env var)"
+    if [ -n "$TUNNEL_NAME" ]; then
+      echo "Tunnel name: $TUNNEL_NAME (set via IIMATEY_NAME env var or 'iimatey start $TUNNEL_NAME')"
+    else
+      echo "Tunnel name: (none — random/unguessable URL; name one with 'iimatey start NAME' or IIMATEY_NAME)"
+    fi
     echo "Session name: $IIMATEY_SESSION (override with IIMATEY_SESSION env var)"
-    echo 'USAGE: iimatey [status|start|stop|connect|https://some-share-url]'
+    echo 'USAGE: iimatey [status|start [NAME]|stop|connect|https://some-share-url]'
     ;;
   start)
     # TODO: nicer logic here to detect available port and start
@@ -103,8 +122,13 @@ case $ACTION in
     ttyd --writable -p 7681 tmux attach -t "$IIMATEY_SESSION" 2>&1 >$TTYD_LOGFILE &
     echo $! >$IIMATEY_DIR/ttyd.pid
     echo ttyd logs are available in $TTYD_LOGFILE
-    echo "Registering tunnel with name: $TUNNEL_NAME"
-    tunnel -n "$TUNNEL_NAME" localhost:7681 2>&1 >$TUNNEL_LOGFILE &
+    if [ -n "$TUNNEL_NAME" ]; then
+      echo "Registering tunnel with name: $TUNNEL_NAME"
+      tunnel -n "$TUNNEL_NAME" localhost:7681 2>&1 >$TUNNEL_LOGFILE &
+    else
+      echo "Registering tunnel with a random, unguessable URL (no name given — pass one: iimatey start NAME)"
+      tunnel localhost:7681 2>&1 >$TUNNEL_LOGFILE &
+    fi
     echo $! >$IIMATEY_DIR/tunnel.pid
     echo tunnel logs are available in $TUNNEL_LOGFILE
     sleep 1 # Would be good to just wait till URL is available
