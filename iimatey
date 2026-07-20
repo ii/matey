@@ -11,10 +11,6 @@ export TUNNEL_LOGFILE=$IIMATEY_DIR/tunnel.log
 # https://www.man7.org/linux/man-pages/man8/wg.8.html#COMMANDS
 # wg genkey :: Generates a random private key in base64 and prints it to standard output.
 # You could save this to persist your url.
-# By default, for safety let's generate it on the fly each time
-# Use IIMATEY_WIREGUARD_KEY if set, or default to running `wg keygen` for a new one each time
-#export TUNNEL_WIREGUARD_KEY=${IIMATEY_WIREGUARD_KEY:-$(wg genkey)}
-export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key
 # Use IIMATEY_API_URL if set, or default to https://iimatey.sharing.io
 export TUNNEL_API_URL=${IIMATEY_API_URL:-https://iimatey.sharing.io}
 
@@ -50,6 +46,17 @@ else
   TUNNEL_NAME=$(sanitize_name "${USER:-$(whoami)}-${SHORT_HOST}")
 fi
 export TUNNEL_NAME
+
+# Key per NAME, not one fixed key for everything. wgtunnel derives the
+# tunnel's routable IP as a hash of its key and keeps a name's registration
+# "warm" for a couple minutes after the last client using that key
+# disconnects — even if the process died abruptly (a crash, a killed pid)
+# with no chance to tell the server. A single shared key meant restarting
+# under the SAME name right after a kill could 409 (a different-looking
+# client racing the old registration's cooldown), found live. Keying the
+# file to the name means the same name reconnects on the same identity
+# (fine, expected), and switching names never fights an old registration.
+export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-${TUNNEL_NAME}
 
 # tmux session name iimatey creates/attaches to. Hardcoded "ii" collides
 # with any other unrelated tmux session already using that name (found
@@ -111,11 +118,17 @@ case $ACTION in
     ;;
   stop)
     # we won't stop tmux... let's leave it
+    # kill, then ALWAYS clean up the pidfile — even if the process was
+    # already dead (a prior crash, an earlier `stop`, a reboot since it
+    # started). `kill && rm` left a stale pidfile behind whenever kill
+    # failed, found live.
     if [[ -e $IIMATEY_DIR/ttyd.pid ]]; then
-      kill $(cat $IIMATEY_DIR/ttyd.pid) && rm $IIMATEY_DIR/ttyd.pid
+      kill $(cat $IIMATEY_DIR/ttyd.pid) 2>/dev/null
+      rm -f $IIMATEY_DIR/ttyd.pid
     fi
     if [[ -e $IIMATEY_DIR/tunnel.pid ]]; then
-      kill $(cat $IIMATEY_DIR/tunnel.pid) && rm $IIMATEY_DIR/tunnel.pid
+      kill $(cat $IIMATEY_DIR/tunnel.pid) 2>/dev/null
+      rm -f $IIMATEY_DIR/tunnel.pid
     fi
     ;;
   connect)
