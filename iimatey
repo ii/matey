@@ -51,15 +51,22 @@ else
 fi
 export TUNNEL_NAME
 
+# tmux session name iimatey creates/attaches to. Hardcoded "ii" collides
+# with any other unrelated tmux session already using that name (found
+# live: a multi-agent host with its own pre-existing "ii" session for
+# other work) — every start/connect then fails at the tmux step, having
+# already spawned ttyd+tunnel as orphans. Override with IIMATEY_SESSION.
+export IIMATEY_SESSION=${IIMATEY_SESSION:-ii}
+
 # Usage iimatey [status|start|stop|connect|https://URL] # Default is status
 ACTION=${1:-status}
 case $ACTION in
   status)
     # List information about tmux
-    if tmux has-session -t ii 2>/dev/null 1>/dev/null; then
+    if tmux has-session -t "$IIMATEY_SESSION" 2>/dev/null 1>/dev/null; then
       tmux list-sessions
-      tmux has-session -t ii
-      tmux list-windows -t ii
+      tmux has-session -t "$IIMATEY_SESSION"
+      tmux list-windows -t "$IIMATEY_SESSION"
     else
       echo "No tmux sessions"
     fi
@@ -74,10 +81,11 @@ case $ACTION in
         grep "You can now connect" $IIMATEY_DIR/tunnel.log
     fi
     # Display how to connect to tmux directly
-    tmux has-session -t ii 2>/dev/null 1>/dev/null &&
+    tmux has-session -t "$IIMATEY_SESSION" 2>/dev/null 1>/dev/null &&
       echo Connect to tmux locally via: &&
-      echo tmux at
+      echo tmux at -t "$IIMATEY_SESSION"
     echo "Tunnel name: $TUNNEL_NAME (override with IIMATEY_NAME env var)"
+    echo "Session name: $IIMATEY_SESSION (override with IIMATEY_SESSION env var)"
     echo 'USAGE: iimatey [status|start|stop|connect|https://some-share-url]'
     ;;
   start)
@@ -85,7 +93,7 @@ case $ACTION in
     # ttyd support -p 0 (random port), but have not reliable way to grab it
     #export TTYD_PORT=${TTYD_PORT:12346}
     # Use port 7681 (ttyd default) to avoid conflict with tunneld on 12345
-    ttyd --writable -p 7681 tmux at 2>&1 >$TTYD_LOGFILE &
+    ttyd --writable -p 7681 tmux attach -t "$IIMATEY_SESSION" 2>&1 >$TTYD_LOGFILE &
     echo $! >$IIMATEY_DIR/ttyd.pid
     echo ttyd logs are available in $TTYD_LOGFILE
     echo "Registering tunnel with name: $TUNNEL_NAME"
@@ -94,14 +102,11 @@ case $ACTION in
     echo tunnel logs are available in $TUNNEL_LOGFILE
     sleep 1 # Would be good to just wait till URL is available
     export IIMATEY_URL=$(grep "You can now connect" $IIMATEY_DIR/tunnel.log | sed 'sX.*\(https://.*\)X\1X')
-    # echo Connect to tmux locally via: &&\
-    # echo tmux at
-    # if $( tmux has-session -t ii ); then
-    if [ $(tmux ls -t ii 2>/dev/null | wc -l) -eq 0 ]; then
-      tmux new -e IIMATEY=true -s ii -P -F "$IIMATEY_URL" -n matey
+    if ! tmux has-session -t "$IIMATEY_SESSION" 2>/dev/null; then
+      tmux new -e IIMATEY=true -s "$IIMATEY_SESSION" -P -F "$IIMATEY_URL" -n matey
       echo $! >$IIMATEY_DIR/tmux.pid
     else
-      tmux at
+      tmux attach -t "$IIMATEY_SESSION"
     fi
     ;;
   stop)
@@ -115,10 +120,10 @@ case $ACTION in
     ;;
   connect)
     # Create new, or connect to old (doesn't start ttyd or tunnel)
-    if $(tmux has-session -t ii); then
-      tmux at
+    if tmux has-session -t "$IIMATEY_SESSION" 2>/dev/null; then
+      tmux attach -t "$IIMATEY_SESSION"
     else
-      tmux new -e IIMATEY=true -s ii
+      tmux new -e IIMATEY=true -s "$IIMATEY_SESSION"
       echo $! >$IIMATEY_DIR/tmux.pid
     fi
     ;;
