@@ -106,12 +106,15 @@ iimatey probe                                       # local ttyd
 iimatey probe https://dg5srp8e9gsj6.try.sharing.io  # full path via tunnel
 #+end_src
 
-Exit 0: writable (marker echoed). Exit 2: connects and streams output but
-typed input never lands — a read-only server or a wedged connection. Exit 1:
-can't connect at all. It exists because a single wedged websocket in a
-client is indistinguishable from "read-only", and once got a healthy stack
-mis-diagnosed as a ttyc/ttyd protocol incompatibility; the probe answers
-which side is broken in ~3 seconds.
+Exit 0: writable AND a padded ~1300B echo survives both directions. Exit 2:
+connects and streams output but even a small typed marker never echoes — a
+read-only server or a wedged connection. Exit 4: small frames pass but the
+padded echo vanishes — an MTU-shaped blackhole on the tunnel path (check
+the sharing host's interface/path MTU; classic on WSL and double-NAT
+links). Exit 1: can't connect at all. It exists because a single wedged
+websocket in a client is indistinguishable from "read-only", and once got a
+healthy stack mis-diagnosed as a ttyc/ttyd protocol incompatibility; the
+probe answers which side is broken in seconds.
 * coder
 #+begin_src shell
 coder server --wg-tunnel-host try.sharing.io

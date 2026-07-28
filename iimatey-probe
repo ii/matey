@@ -13,6 +13,12 @@ No URL probes the local ttyd: http://localhost:$TTYD_PORT (default 7681),
 honoring the same TTYD_PORT override iimatey itself uses. Echo-wait timeout
 defaults to 15s (IIMATEY_PROBE_TIMEOUT or second argument to override).
 
+Exit codes: 0 = writable AND large (~1300B) frames pass both ways;
+1 = unreachable; 2 = output streams but even a small typed marker never
+echoes back; 3 = echoes but doesn't execute; 4 = MTU-shaped blackhole
+(small frames pass, padded ~1300B echo vanishes — check the client host's
+interface/path MTU; classic on WSL and double-NAT links).
+
 Born from a live mis-diagnosis: a single wedged websocket connection made
 ttyc look read-only against ttyd 1.7.7, and got written up as a protocol
 incompatibility. A 3-second probe like this would have shown the share
@@ -109,15 +115,20 @@ def send_frame(sock, payload, opcode=0x1):
     sock.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
 
 
-def read_frames(sock, buf, deadline):
-    """Yield (opcode, payload) until deadline; replies to pings."""
+def read_frames(sock, buf_ref, deadline):
+    """Yield (opcode, payload) until deadline; replies to pings.
+
+    buf_ref is a shared bytearray mutated in place, so a second call can pick
+    up exactly where a previous phase's read left off on the same socket.
+    """
     sock.settimeout(0.5)
     while time.monotonic() < deadline:
         while True:
-            frame = parse_frame(buf)
+            frame = parse_frame(bytes(buf_ref))
             if frame is None:
                 break
-            opcode, payload, buf = frame
+            opcode, payload, rest = frame
+            buf_ref[:] = rest
             if opcode == 0x9:  # ping -> pong
                 send_frame(sock, payload, opcode=0xA)
             elif opcode == 0x8:  # close
@@ -130,7 +141,20 @@ def read_frames(sock, buf, deadline):
             continue
         if not chunk:
             return
-        buf = buf + chunk
+        buf_ref.extend(chunk)
+
+
+def await_marker(sock, buf_ref, marker, timeout, need=2):
+    """Collect OUTPUT frames until `marker` appears `need` times (tty echo of
+    the typed line + the command's own output) or timeout. Returns bytes."""
+    out = bytearray()
+    deadline = time.monotonic() + timeout
+    for _opcode, payload in read_frames(sock, buf_ref, deadline):
+        if payload[:1] == b"0":  # OUTPUT
+            out += payload[1:]
+            if out.count(marker.encode()) >= need:
+                break
+    return out
 
 
 def parse_frame(buf):
@@ -177,20 +201,36 @@ def main():
     except OSError as e:
         die(f"cannot connect to {base}: {e}")
     try:
+        buf_ref = bytearray(buf)
         # ttyd init: JSON auth/size message, then '0'-prefixed INPUT messages.
-        send_frame(sock, json.dumps({"AuthToken": token, "columns": 120, "rows": 30}))
+        send_frame(sock, json.dumps({"AuthToken": token, "columns": 200, "rows": 50}))
         time.sleep(0.7)  # let ttyd spawn/attach the command before typing
         send_frame(sock, "0" + PROBE_INPUT)
 
-        out = bytearray()
-        for opcode, payload in read_frames(sock, buf, time.monotonic() + timeout):
-            if payload[:1] == b"0":  # OUTPUT
-                out += payload[1:]
-                # marker appears once as tty echo, again as command output
-                if out.count(MARKER.encode()) >= 2:
-                    print(f"iimatey-probe: OK: {base} is up and WRITABLE "
-                          f"({len(out)} bytes seen, marker echoed)")
-                    return
+        out = await_marker(sock, buf_ref, MARKER, timeout)
+        if out.count(MARKER.encode()) >= 2:
+            # Phase 2: same check with a padded ~1300-byte line. A path that
+            # black-holes full-size wireguard datagrams passes the small
+            # marker but eats this one (seen live: WSL box — keystrokes
+            # arrived, screen-sized output never came back).
+            pad_marker = f"iimatey-probe-pad-{secrets.token_hex(4)}"
+            # Marker BEFORE the padding: the pty wraps long lines at the
+            # terminal width, and a wrap boundary through the marker would
+            # split it; at the line start it always survives intact.
+            padding = "P" * 1300
+            send_frame(sock, "0" + f" echo {pad_marker} {padding}\n")
+            out2 = await_marker(sock, buf_ref, pad_marker, timeout)
+            if out2.count(pad_marker.encode()) >= 2:
+                print(f"iimatey-probe: OK: {base} is up and WRITABLE, and "
+                      f"large (~1300B) frames survive the path both ways "
+                      f"({len(out) + len(out2)} bytes seen)")
+                return
+            die(f"{base} is writable for small frames, but a padded ~1300B "
+                f"echo did not come back within {timeout:g}s — MTU-shaped "
+                f"blackhole on the tunnel path (small packets pass, big ones "
+                f"vanish). Check the client host's interface/path MTU "
+                f"(classic on WSL and double-NAT links); got {len(out2)} "
+                f"bytes in phase 2.", 4)
         if MARKER.encode() in out:
             die(f"{base} echoed the input but never ran it "
                 f"(terminal attached but shell not responding?)", 3)
