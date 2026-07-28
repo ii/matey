@@ -61,7 +61,7 @@ case $(uname -s) in
 esac
 
 # Install tunnel from github release
-TUNNEL_RELEASE=v0.1.19-sharing
+TUNNEL_RELEASE=v0.1.23-sharing
 TUNNEL_URL=https://github.com/ii/wgtunnel/releases/download/$TUNNEL_RELEASE/tunnel-$OS-$ARCH
 sudo curl -fL -o /usr/local/bin/tunnel $TUNNEL_URL
 sudo chmod 0755 /usr/local/bin/tunnel # make executeable
