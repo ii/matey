@@ -68,9 +68,9 @@ export TUNNEL_NAME
 # means a random/unguessable URL each time, not a fixed key that just
 # happens to have no name attached to it.
 if [ -n "$TUNNEL_NAME" ]; then
-  export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-${TUNNEL_NAME}
+  export TUNNEL_WIREGUARD_KEY_FILE=${IIMATEY_DIR}/tunnel-key-${TUNNEL_NAME}
 else
-  export TUNNEL_WIREGUARD_KEYFILE=${IIMATEY_DIR}/tunnel-key-onetime-$$-$(date +%s%N 2>/dev/null || echo $RANDOM)
+  export TUNNEL_WIREGUARD_KEY_FILE=${IIMATEY_DIR}/tunnel-key-onetime-$$-$(date +%s%N 2>/dev/null || echo $RANDOM)
 fi
 
 # tmux session name iimatey creates/attaches to. Hardcoded "ii" collides
@@ -80,7 +80,7 @@ fi
 # already spawned ttyd+tunnel as orphans. Override with IIMATEY_SESSION.
 export IIMATEY_SESSION=${IIMATEY_SESSION:-ii}
 
-# Usage iimatey [status|start [NAME]|stop|connect|https://URL] # Default is status
+# Usage iimatey [status|start [NAME]|stop|connect|probe [URL]|https://URL] # Default is status
 ACTION=${1:-status}
 case $ACTION in
   status)
@@ -112,7 +112,7 @@ case $ACTION in
       echo "Tunnel name: (none — random/unguessable URL; name one with 'iimatey start NAME' or IIMATEY_NAME)"
     fi
     echo "Session name: $IIMATEY_SESSION (override with IIMATEY_SESSION env var)"
-    echo 'USAGE: iimatey [status|start [NAME]|stop|connect|https://some-share-url]'
+    echo 'USAGE: iimatey [status|start [NAME]|stop|connect|probe [URL]|https://some-share-url]'
     ;;
   start)
     # TODO: nicer logic here to detect available port and start
@@ -154,6 +154,9 @@ case $ACTION in
       kill $(cat $IIMATEY_DIR/tunnel.pid) 2>/dev/null
       rm -f $IIMATEY_DIR/tunnel.pid
     fi
+    # One-time (unnamed) keys are single-use by design; sweep them so they
+    # don't accumulate now that TUNNEL_WIREGUARD_KEY_FILE is actually honored.
+    rm -f $IIMATEY_DIR/tunnel-key-onetime-*
     ;;
   connect)
     # Create new, or connect to old (doesn't start ttyd or tunnel)
@@ -163,6 +166,21 @@ case $ACTION in
       tmux new -e IIMATEY=true -s "$IIMATEY_SESSION"
       echo $! >$IIMATEY_DIR/tmux.pid
     fi
+    ;;
+  probe)
+    # Prove a share is up AND writable, end to end: speaks ttyd's websocket
+    # protocol (stdlib python3), types one marker command into the shared
+    # terminal, and checks the echo comes back. Defaults to the local ttyd;
+    # pass a share URL to probe through the tunnel. Exists because a wedged
+    # connection is indistinguishable from "read-only" in a client — this
+    # answers which side is broken in ~3 seconds.
+    command -v python3 >/dev/null 2>&1 || {
+      echo "ERROR: probe needs python3 (stdlib only — no packages)" >&2
+      exit 1
+    }
+    PROBE="$(dirname "$0")/iimatey-probe"
+    [ -x "$PROBE" ] || PROBE=iimatey-probe
+    exec "$PROBE" ${2:+"$2"}
     ;;
   http://*|https://*)
     # Client mode: connect to a remote iimatey/ttyd share URL (yours or
