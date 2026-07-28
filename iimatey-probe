@@ -6,8 +6,12 @@ no websockets package), types one harmless marker command into the shared
 terminal, and checks the echo comes back. Exit 0 = share is writable;
 non-zero = it isn't, with a reason on stderr.
 
-Usage: iimatey-probe [URL]        (default: http://localhost:7681)
+Usage: iimatey-probe [URL] [TIMEOUT_SECONDS]
        iimatey probe [URL]        (same thing, via the iimatey wrapper)
+
+No URL probes the local ttyd: http://localhost:$TTYD_PORT (default 7681),
+honoring the same TTYD_PORT override iimatey itself uses. Echo-wait timeout
+defaults to 15s (IIMATEY_PROBE_TIMEOUT or second argument to override).
 
 Born from a live mis-diagnosis: a single wedged websocket connection made
 ttyc look read-only against ttyd 1.7.7, and got written up as a protocol
@@ -152,11 +156,20 @@ def parse_frame(buf):
 
 
 def main():
-    url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:7681"
+    # Default to the local ttyd on the same port iimatey uses — hardcoding
+    # 7681 here made bare `iimatey probe` check the WRONG port on any box
+    # running with a TTYD_PORT override, found live.
+    default_url = f"http://localhost:{os.environ.get('TTYD_PORT', '7681')}"
+    url = sys.argv[1] if len(sys.argv) > 1 else default_url
     if url in ("-h", "--help"):
         print(__doc__.strip())
         sys.exit(0)
     base = url.rstrip("/")
+    # Echo wait. 5s produced a false negative live: the marker landed in the
+    # remote terminal but its echo took longer than 5s to come back over a
+    # slow tunnel. Default generous; override for snappy local checks.
+    timeout = float(sys.argv[2] if len(sys.argv) > 2
+                    else os.environ.get("IIMATEY_PROBE_TIMEOUT", "15"))
 
     token = fetch_token(base)
     try:
@@ -170,7 +183,7 @@ def main():
         send_frame(sock, "0" + PROBE_INPUT)
 
         out = bytearray()
-        for opcode, payload in read_frames(sock, buf, time.monotonic() + 5):
+        for opcode, payload in read_frames(sock, buf, time.monotonic() + timeout):
             if payload[:1] == b"0":  # OUTPUT
                 out += payload[1:]
                 # marker appears once as tty echo, again as command output
@@ -182,10 +195,12 @@ def main():
             die(f"{base} echoed the input but never ran it "
                 f"(terminal attached but shell not responding?)", 3)
         if out:
-            die(f"{base} streams output but the marker never echoed back "
-                f"(read-only server, wedged connection, or the shared command "
-                f"exited — e.g. ttyd attached to a tmux session that doesn't "
-                f"exist; {len(out)} bytes seen: {bytes(out[:80])!r})", 2)
+            die(f"{base} streams output but the marker did not echo back "
+                f"within {timeout:g}s (read-only server, wedged connection, a "
+                f"dead shared command — e.g. ttyd attached to a tmux session "
+                f"that doesn't exist — or just a link slower than the timeout: "
+                f"the typed input may still have landed remotely; "
+                f"{len(out)} bytes seen: {bytes(out[:80])!r})", 2)
         die(f"{base} accepted the websocket but produced no output at all", 2)
     finally:
         try:

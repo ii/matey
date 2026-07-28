@@ -80,6 +80,13 @@ fi
 # already spawned ttyd+tunnel as orphans. Override with IIMATEY_SESSION.
 export IIMATEY_SESSION=${IIMATEY_SESSION:-ii}
 
+# Local ttyd port. The old hardcoded 7681 (ttyd's default) collides with any
+# system-wide ttyd already on the box — found live: a root ttyd.service owned
+# 7681, iimatey's own ttyd died at launch, and the tunnel happily published
+# the ROOT login shell at the share URL. Override with TTYD_PORT; start also
+# refuses to run if the port is already taken (see the start case).
+export TTYD_PORT=${TTYD_PORT:-7681}
+
 # Usage iimatey [status|start [NAME]|stop|connect|probe [URL]|https://URL] # Default is status
 ACTION=${1:-status}
 case $ACTION in
@@ -95,7 +102,7 @@ case $ACTION in
     # Display how to connect to ttyd
     if [[ -e $IIMATEY_DIR/ttyd.pid ]]; then
       ps -p $(cat $IIMATEY_DIR/ttyd.pid) 2>&1 >/dev/null &&
-        echo Connect to ttyd locally via http://localhost:7681
+        echo Connect to ttyd locally via http://localhost:$TTYD_PORT
     fi
     # Display how to connect to tunnel
     if [[ -e $IIMATEY_DIR/tunnel.pid ]]; then
@@ -115,27 +122,37 @@ case $ACTION in
     echo 'USAGE: iimatey [status|start [NAME]|stop|connect|probe [URL]|https://some-share-url]'
     ;;
   start)
-    # TODO: nicer logic here to detect available port and start
-    # ttyd support -p 0 (random port), but have not reliable way to grab it
-    #export TTYD_PORT=${TTYD_PORT:12346}
-    # Use port 7681 (ttyd default) to avoid conflict with tunneld on 12345
-    ttyd --writable -p 7681 tmux attach -t "$IIMATEY_SESSION" 2>&1 >$TTYD_LOGFILE &
+    # Refuse to start if something else already owns $TTYD_PORT: our ttyd
+    # would die at bind, and the tunnel would then publish WHATEVER is on
+    # that port at the share URL (on one box: a root login ttyd). bash's
+    # /dev/tcp keeps this dependency-free — no lsof/ss needed.
+    if (exec 3<>/dev/tcp/127.0.0.1/$TTYD_PORT) 2>/dev/null; then
+      echo "ERROR: port $TTYD_PORT is already in use — refusing to start, we will not tunnel a service we don't own." >&2
+      echo "       Set TTYD_PORT to a free port (e.g. TTYD_PORT=7682 iimatey start NAME) or stop the other service." >&2
+      exit 1
+    fi
+    # NOTE: >$LOG 2>&1, not 2>&1 >$LOG — the latter sends stderr to the
+    # terminal and leaves the logfile empty of errors, found live while
+    # diagnosing exactly the port collision above.
+    ttyd --writable -p $TTYD_PORT tmux attach -t "$IIMATEY_SESSION" >$TTYD_LOGFILE 2>&1 &
     echo $! >$IIMATEY_DIR/ttyd.pid
     echo ttyd logs are available in $TTYD_LOGFILE
     if [ -n "$TUNNEL_NAME" ]; then
       echo "Registering tunnel with name: $TUNNEL_NAME"
-      tunnel -n "$TUNNEL_NAME" localhost:7681 2>&1 >$TUNNEL_LOGFILE &
+      tunnel -n "$TUNNEL_NAME" localhost:$TTYD_PORT >$TUNNEL_LOGFILE 2>&1 &
     else
       echo "Registering tunnel with a random, unguessable URL (no name given — pass one: iimatey start NAME)"
-      tunnel localhost:7681 2>&1 >$TUNNEL_LOGFILE &
+      tunnel localhost:$TTYD_PORT >$TUNNEL_LOGFILE 2>&1 &
     fi
     echo $! >$IIMATEY_DIR/tunnel.pid
     echo tunnel logs are available in $TUNNEL_LOGFILE
     sleep 1 # Would be good to just wait till URL is available
     export IIMATEY_URL=$(grep "You can now connect" $IIMATEY_DIR/tunnel.log | sed 'sX.*\(https://.*\)X\1X')
     if ! tmux has-session -t "$IIMATEY_SESSION" 2>/dev/null; then
+      # (No tmux.pid: tmux new runs in the FOREGROUND, so the old
+      # `echo $! > tmux.pid` here actually recorded the tunnel's pid — the
+      # last background job — and nothing ever read tmux.pid anyway.)
       tmux new -e IIMATEY=true -s "$IIMATEY_SESSION" -P -F "$IIMATEY_URL" -n matey
-      echo $! >$IIMATEY_DIR/tmux.pid
     else
       tmux attach -t "$IIMATEY_SESSION"
     fi
@@ -157,6 +174,10 @@ case $ACTION in
     # One-time (unnamed) keys are single-use by design; sweep them so they
     # don't accumulate now that TUNNEL_WIREGUARD_KEY_FILE is actually honored.
     rm -f $IIMATEY_DIR/tunnel-key-onetime-*
+    # Sweep any historical tmux.pid too: old versions wrote the wrong pid
+    # here (the tunnel's, via `echo $!` after a foreground tmux) and nothing
+    # ever read it.
+    rm -f $IIMATEY_DIR/tmux.pid
     ;;
   connect)
     # Create new, or connect to old (doesn't start ttyd or tunnel)
@@ -164,7 +185,6 @@ case $ACTION in
       tmux attach -t "$IIMATEY_SESSION"
     else
       tmux new -e IIMATEY=true -s "$IIMATEY_SESSION"
-      echo $! >$IIMATEY_DIR/tmux.pid
     fi
     ;;
   probe)
