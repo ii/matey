@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""iimatey-probe: prove an iimatey/ttyd share is up AND writable, end to end.
+
+Speaks ttyd's websocket protocol directly (python3 stdlib only — no aiohttp,
+no websockets package), types one harmless marker command into the shared
+terminal, and checks the echo comes back. Exit 0 = share is writable;
+non-zero = it isn't, with a reason on stderr.
+
+Usage: iimatey-probe [URL]        (default: http://localhost:7681)
+       iimatey probe [URL]        (same thing, via the iimatey wrapper)
+
+Born from a live mis-diagnosis: a single wedged websocket connection made
+ttyc look read-only against ttyd 1.7.7, and got written up as a protocol
+incompatibility. A 3-second probe like this would have shown the share
+itself was fine.
+"""
+import base64
+import hashlib
+import json
+import os
+import secrets
+import socket
+import ssl
+import struct
+import sys
+import time
+import urllib.request
+from urllib.parse import urlparse
+
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+MARKER = f"iimatey-probe-{secrets.token_hex(4)}"
+# Space before echo: skipped from shell history on HISTCONTROL=ignorespace
+# setups; harmless elsewhere. \n submits.
+PROBE_INPUT = f" echo {MARKER}\n"
+
+
+def die(msg, code=1):
+    print(f"iimatey-probe: FAIL: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def fetch_token(base):
+    """ttyd >= 1.6 serves /token; empty token unless credentials are set."""
+    try:
+        with urllib.request.urlopen(base + "/token", timeout=5) as r:
+            return json.load(r).get("token", "")
+    except Exception:
+        return ""  # older ttyd: no /token endpoint — empty token is correct
+
+
+def ws_connect(url):
+    """Open a websocket to ttyd's /ws endpoint. Returns a connected socket."""
+    u = urlparse(url)
+    tls = u.scheme in ("https", "wss")
+    host = u.hostname
+    port = u.port or (443 if tls else 80)
+
+    sock = socket.create_connection((host, port), timeout=10)
+    if tls:
+        ctx = ssl.create_default_context()
+        sock = ctx.wrap_socket(sock, server_hostname=host)
+
+    key = base64.b64encode(secrets.token_bytes(16)).decode()
+    hostport = host if port in (80, 443) else f"{host}:{port}"
+    req = (
+        f"GET /ws HTTP/1.1\r\n"
+        f"Host: {hostport}\r\n"
+        f"Upgrade: websocket\r\n"
+        f"Connection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\n"
+        f"Sec-WebSocket-Version: 13\r\n"
+        f"Sec-WebSocket-Protocol: tty\r\n"
+        f"Origin: {'https' if tls else 'http'}://{hostport}\r\n"
+        f"\r\n"
+    )
+    sock.sendall(req.encode())
+
+    resp = b""
+    while b"\r\n\r\n" not in resp:
+        chunk = sock.recv(4096)
+        if not chunk:
+            die("connection closed during websocket handshake")
+        resp = resp + chunk
+    head, _, rest = resp.partition(b"\r\n\r\n")
+    status = head.split(b"\r\n", 1)[0].decode(errors="replace")
+    if " 101 " not in f" {status} ":
+        die(f"websocket handshake refused: {status!r}")
+    expect = base64.b64encode(hashlib.sha1((key + WS_GUID).encode()).digest()).decode()
+    if expect.encode() not in head:
+        die("websocket handshake accept-key mismatch")
+    return sock, rest
+
+
+def send_frame(sock, payload, opcode=0x1):
+    """Client frames must be masked (RFC 6455)."""
+    data = payload.encode() if isinstance(payload, str) else payload
+    mask = secrets.token_bytes(4)
+    n = len(data)
+    if n < 126:
+        header = struct.pack("!BB", 0x80 | opcode, 0x80 | n)
+    elif n < 65536:
+        header = struct.pack("!BBH", 0x80 | opcode, 0x80 | 126, n)
+    else:
+        header = struct.pack("!BBQ", 0x80 | opcode, 0x80 | 127, n)
+    sock.sendall(header + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(data)))
+
+
+def read_frames(sock, buf, deadline):
+    """Yield (opcode, payload) until deadline; replies to pings."""
+    sock.settimeout(0.5)
+    while time.monotonic() < deadline:
+        while True:
+            frame = parse_frame(buf)
+            if frame is None:
+                break
+            opcode, payload, buf = frame
+            if opcode == 0x9:  # ping -> pong
+                send_frame(sock, payload, opcode=0xA)
+            elif opcode == 0x8:  # close
+                return
+            else:
+                yield opcode, payload
+        try:
+            chunk = sock.recv(65536)
+        except (socket.timeout, ssl.SSLError):
+            continue
+        if not chunk:
+            return
+        buf = buf + chunk
+
+
+def parse_frame(buf):
+    """Parse one server frame (never masked) from buf, or None if incomplete."""
+    if len(buf) < 2:
+        return None
+    opcode = buf[0] & 0x0F
+    n = buf[1] & 0x7F
+    off = 2
+    if n == 126:
+        if len(buf) < 4:
+            return None
+        n = struct.unpack("!H", buf[2:4])[0]
+        off = 4
+    elif n == 127:
+        if len(buf) < 10:
+            return None
+        n = struct.unpack("!Q", buf[2:10])[0]
+        off = 10
+    if len(buf) < off + n:
+        return None
+    return opcode, buf[off:off + n], buf[off + n:]
+
+
+def main():
+    url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:7681"
+    if url in ("-h", "--help"):
+        print(__doc__.strip())
+        sys.exit(0)
+    base = url.rstrip("/")
+
+    token = fetch_token(base)
+    try:
+        sock, buf = ws_connect(base)
+    except OSError as e:
+        die(f"cannot connect to {base}: {e}")
+    try:
+        # ttyd init: JSON auth/size message, then '0'-prefixed INPUT messages.
+        send_frame(sock, json.dumps({"AuthToken": token, "columns": 120, "rows": 30}))
+        time.sleep(0.7)  # let ttyd spawn/attach the command before typing
+        send_frame(sock, "0" + PROBE_INPUT)
+
+        out = bytearray()
+        for opcode, payload in read_frames(sock, buf, time.monotonic() + 5):
+            if payload[:1] == b"0":  # OUTPUT
+                out += payload[1:]
+                # marker appears once as tty echo, again as command output
+                if out.count(MARKER.encode()) >= 2:
+                    print(f"iimatey-probe: OK: {base} is up and WRITABLE "
+                          f"({len(out)} bytes seen, marker echoed)")
+                    return
+        if MARKER.encode() in out:
+            die(f"{base} echoed the input but never ran it "
+                f"(terminal attached but shell not responding?)", 3)
+        if out:
+            die(f"{base} streams output but the marker never echoed back "
+                f"(read-only server, wedged connection, or the shared command "
+                f"exited — e.g. ttyd attached to a tmux session that doesn't "
+                f"exist; {len(out)} bytes seen: {bytes(out[:80])!r})", 2)
+        die(f"{base} accepted the websocket but produced no output at all", 2)
+    finally:
+        try:
+            send_frame(sock, b"", opcode=0x8)
+            sock.close()
+        except OSError:
+            pass
+
+
+if __name__ == "__main__":
+    main()

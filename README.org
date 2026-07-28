@@ -91,6 +91,27 @@ backoff, etc — see ~ttyc --help~.)
 
 Note: license is GPLv3 (depau/ttyc) — installed as a separate pinned-release
 binary alongside ttyd/tunnel, never vendored/linked into this repo.
+
+** probe: is my share actually writable?
+
+~iimatey probe [URL]~ (or ~iimatey-probe~ directly) proves a share is up AND
+writable end to end: it speaks ttyd's websocket protocol itself (python3
+stdlib only, no packages), types one marker ~echo~ into the shared terminal,
+and checks the echo comes back. No URL means the local ttyd on
+~localhost:7681~; pass your share URL to test the whole path through the
+tunnel.
+
+#+begin_src shell
+iimatey probe                                       # local ttyd
+iimatey probe https://dg5srp8e9gsj6.try.sharing.io  # full path via tunnel
+#+end_src
+
+Exit 0: writable (marker echoed). Exit 2: connects and streams output but
+typed input never lands — a read-only server or a wedged connection. Exit 1:
+can't connect at all. It exists because a single wedged websocket in a
+client is indistinguishable from "read-only", and once got a healthy stack
+mis-diagnosed as a ttyc/ttyd protocol incompatibility; the probe answers
+which side is broken in ~3 seconds.
 * coder
 #+begin_src shell
 coder server --wg-tunnel-host try.sharing.io

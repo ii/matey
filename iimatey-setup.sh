@@ -85,3 +85,7 @@ echo $PATH | grep /usr/local/bin >/dev/null || echo "You may want to add /usr/lo
 # Install iimatey script from github
 sudo curl -fo /usr/local/bin/iimatey -L https://raw.githubusercontent.com/ii/matey/canon/iimatey
 sudo chmod +x /usr/local/bin/iimatey
+
+# Install iimatey-probe (writability self-test, python3 stdlib only)
+sudo curl -fo /usr/local/bin/iimatey-probe -L https://raw.githubusercontent.com/ii/matey/canon/iimatey-probe
+sudo chmod +x /usr/local/bin/iimatey-probe
