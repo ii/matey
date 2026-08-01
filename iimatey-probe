@@ -72,8 +72,11 @@ def ws_connect(url):
 
     key = base64.b64encode(secrets.token_bytes(16)).decode()
     hostport = host if port in (80, 443) else f"{host}:{port}"
+    # Honor a path prefix (e.g. probing a ttyd mounted at /xterm behind a
+    # wrapper): ws lives at <path>/ws, not always /ws.
+    ws_path = (u.path.rstrip("/") or "") + "/ws"
     req = (
-        f"GET /ws HTTP/1.1\r\n"
+        f"GET {ws_path} HTTP/1.1\r\n"
         f"Host: {hostport}\r\n"
         f"Upgrade: websocket\r\n"
         f"Connection: Upgrade\r\n"
