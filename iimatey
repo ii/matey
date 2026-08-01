@@ -119,7 +119,7 @@ case $ACTION in
       echo "Tunnel name: (none — random/unguessable URL; name one with 'iimatey start NAME' or IIMATEY_NAME)"
     fi
     echo "Session name: $IIMATEY_SESSION (override with IIMATEY_SESSION env var)"
-    echo 'USAGE: iimatey [status|start [NAME]|stop|connect|probe [URL]|https://some-share-url]'
+    echo 'USAGE: iimatey [status|start [NAME]|stop|connect|probe [URL]|share TARGET [NAME] [--rw]|unshare NAME|shares|https://some-share-url]'
     ;;
   start)
     # Refuse to start if something else already owns $TTYD_PORT: our ttyd
@@ -186,6 +186,120 @@ case $ACTION in
     else
       tmux new -e IIMATEY=true -s "$IIMATEY_SESSION"
     fi
+    ;;
+  share|single)
+    # iimatey share TARGET [NAME] [--rw] [--no-tunnel] [--port N]
+    # ("single" is an alias: share a SINGLE window/role, never the stack.)
+    #
+    # Share ONE tmux window (a "role"), not a whole session. Builds a
+    # dedicated viewer session with the target window LINKED in, so
+    # viewers see exactly that role and nothing else:
+    #   - prefix/prefix2 set to None in the viewer session: viewers cannot
+    #     invoke ANY tmux command (no new-window shell escape, no window
+    #     switching, no kill) — raw keys flow to the shared pane only.
+    #   - READ-ONLY by default, enforced server-side (ttyd without
+    #     --writable). Pass --rw for a writable share.
+    #   - The shared window's size is frozen (window-size manual) for the
+    #     duration so a small viewer can't shrink the real display;
+    #     restored on unshare.
+    # TARGET may be a window (stage:5) or pane (stage:5.0) — panes share
+    # their containing window. NAME defaults to the window's name.
+    TARGET="${2:-}"
+    [ -n "$TARGET" ] || { echo "USAGE: iimatey share TARGET [NAME] [--rw] [--no-tunnel] [--port N]" >&2; exit 1; }
+    tmux has-session -t "${TARGET%%:*}" 2>/dev/null || { echo "ERROR: no such tmux target: $TARGET" >&2; exit 1; }
+    WIN=$(tmux display -p -t "$TARGET" '#{session_name}:#{window_index}') || exit 1
+    shift 2
+    SHARE_NAME="" RW="" DO_TUNNEL=1 SHARE_PORT=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --rw) RW=1 ;;
+        --no-tunnel) DO_TUNNEL="" ;;
+        --port) SHARE_PORT="$2"; shift ;;
+        *) SHARE_NAME="$1" ;;
+      esac
+      shift
+    done
+    [ -n "$SHARE_NAME" ] || SHARE_NAME=$(tmux display -p -t "$WIN" '#{window_name}')
+    SHARE_NAME=$(sanitize_name "$SHARE_NAME")
+    SNAME="matey-share-$SHARE_NAME"
+    SHARE_DIR=$IIMATEY_DIR/share-$SHARE_NAME
+    if tmux has-session -t "$SNAME" 2>/dev/null; then
+      echo "ERROR: '$SHARE_NAME' is already shared (iimatey unshare $SHARE_NAME first)" >&2
+      exit 1
+    fi
+    mkdir -p "$SHARE_DIR"
+    # Freeze geometry BEFORE any viewer can attach, remember prior value.
+    tmux show -w -v -t "$WIN" window-size 2>/dev/null >"$SHARE_DIR/window-size.prev" || true
+    tmux setw -t "$WIN" window-size manual
+    echo "$WIN" >"$SHARE_DIR/window"
+    W=$(tmux display -p -t "$WIN" '#{window_width}')
+    H=$(tmux display -p -t "$WIN" '#{window_height}')
+    tmux new-session -d -s "$SNAME" -x "$W" -y "$H"
+    DUMMY=$(tmux display -p -t "$SNAME" '#{window_index}')
+    tmux set -t "$SNAME" prefix None
+    tmux set -t "$SNAME" prefix2 None
+    tmux set -t "$SNAME" status off
+    tmux link-window -s "$WIN" -t "$SNAME:9"
+    tmux select-window -t "$SNAME:9"
+    tmux kill-window -t "$SNAME:$DUMMY"
+    # Pick a port: explicit, else first free from 7684 (main share is 7681).
+    if [ -z "$SHARE_PORT" ]; then
+      SHARE_PORT=7684
+      while (exec 3<>/dev/tcp/127.0.0.1/$SHARE_PORT) 2>/dev/null; do
+        SHARE_PORT=$((SHARE_PORT + 1))
+      done
+    fi
+    echo "$SHARE_PORT" >"$SHARE_DIR/port"
+    if [ -n "$RW" ]; then WOPT=--writable; MODE=WRITABLE; else WOPT=""; MODE=read-only; fi
+    ttyd $WOPT -m "${IIMATEY_SHARE_MAX_CLIENTS:-10}" -p "$SHARE_PORT" tmux attach -t "$SNAME" >"$SHARE_DIR/ttyd.log" 2>&1 &
+    echo $! >"$SHARE_DIR/ttyd.pid"
+    echo "Sharing $WIN ($MODE) locally at http://localhost:$SHARE_PORT"
+    if [ -n "$DO_TUNNEL" ]; then
+      TUNNEL_WIREGUARD_KEY_FILE=$IIMATEY_DIR/tunnel-key-$SHARE_NAME \
+        tunnel -n "$SHARE_NAME" localhost:"$SHARE_PORT" >"$SHARE_DIR/tunnel.log" 2>&1 &
+      echo $! >"$SHARE_DIR/tunnel.pid"
+      sleep 2
+      grep "You can now connect" "$SHARE_DIR/tunnel.log" | tail -1
+    fi
+    echo "Stop with: iimatey unshare $SHARE_NAME"
+    ;;
+  unshare)
+    SHARE_NAME=$(sanitize_name "${2:-}")
+    SHARE_DIR=$IIMATEY_DIR/share-$SHARE_NAME
+    [ -d "$SHARE_DIR" ] || { echo "ERROR: no share named '$SHARE_NAME' (looked in $SHARE_DIR)" >&2; exit 1; }
+    for p in ttyd tunnel; do
+      if [[ -e $SHARE_DIR/$p.pid ]]; then
+        kill "$(cat "$SHARE_DIR/$p.pid")" 2>/dev/null
+        rm -f "$SHARE_DIR/$p.pid"
+      fi
+    done
+    # Killing the viewer session only UNLINKS the shared window — the real
+    # window lives on in its home session.
+    tmux kill-session -t "matey-share-$SHARE_NAME" 2>/dev/null
+    if [[ -s $SHARE_DIR/window ]]; then
+      WIN=$(cat "$SHARE_DIR/window")
+      PREV=$(cat "$SHARE_DIR/window-size.prev" 2>/dev/null)
+      if [ -n "$PREV" ]; then
+        tmux setw -t "$WIN" window-size "$PREV" 2>/dev/null
+      else
+        tmux setw -u -t "$WIN" window-size 2>/dev/null
+      fi
+    fi
+    rm -rf "$SHARE_DIR"
+    echo "Unshared $SHARE_NAME"
+    ;;
+  shares)
+    found=""
+    for d in "$IIMATEY_DIR"/share-*/; do
+      [ -d "$d" ] || continue
+      found=1
+      n=$(basename "$d"); n=${n#share-}
+      alive=dead
+      [ -e "$d/ttyd.pid" ] && kill -0 "$(cat "$d/ttyd.pid")" 2>/dev/null && alive=live
+      url=$(grep -o 'https://[a-z0-9.-]*\.sharing\.io' "$d/tunnel.log" 2>/dev/null | tail -1)
+      echo "$n: $alive window=$(cat "$d/window" 2>/dev/null) port=$(cat "$d/port" 2>/dev/null) ${url:-(no tunnel)}"
+    done
+    [ -n "$found" ] || echo "No active shares (iimatey share TARGET [NAME] to create one)"
     ;;
   probe)
     # Prove a share is up AND writable, end to end: speaks ttyd's websocket

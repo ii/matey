@@ -92,6 +92,27 @@ backoff, etc — see ~ttyc --help~.)
 Note: license is GPLv3 (depau/ttyc) — installed as a separate pinned-release
 binary alongside ttyd/tunnel, never vendored/linked into this repo.
 
+** share one role, not the whole stack
+
+~iimatey share TARGET [NAME] [--rw]~ (alias: ~iimatey single~) shares ONE
+tmux window — a single role/agent — while the rest of your stack stays
+private. It links the target window into a dedicated viewer session with
+tmux's prefix keys disabled (viewers cannot open windows, switch, or reach
+a shell — keystrokes only ever go to the shared pane) and serves that via
+its own ttyd+tunnel, independent of any full-session share.
+
+#+begin_src shell
+iimatey share infra:5 my-agent          # read-only: https://my-agent.sharing.io
+iimatey share infra:5 my-agent --rw     # writable variant
+iimatey shares                          # list active shares
+iimatey unshare my-agent                # tear down (real window is untouched)
+#+end_src
+
+Read-only is the default and is enforced server-side (ttyd without
+--writable). The shared window's geometry is frozen for the duration so a
+small viewer window can't shrink your real display; restored on unshare.
+TARGET can be a pane (stage:5.0) — it shares the containing window.
+
 ** probe: is my share actually writable?
 
 ~iimatey probe [URL]~ (or ~iimatey-probe~ directly) proves a share is up AND
